@@ -96,6 +96,54 @@ func buildIssues(diags []Diagnostic, linterNameBuilder func(diag *Diagnostic) st
 		} else {
 			text = fmt.Sprintf("%s: %s", diag.Analyzer.Name, diag.Message)
 		}
+		/// ---
+
+		issue := result.Issue{
+			FromLinter: linterName,
+			Text:       text,
+			Pos:        diag.Position,
+			Pkg:        diag.Pkg,
+			// LineRange: &result.Range{
+			// 	From: diag.SuggestedFixes[0].TextEdits[0].Pos,
+			// 	To:   0,
+			// },
+			// Replacement: &result.Replacement{
+			// 	NeedOnlyDelete: false,
+			// 	NewLines:       nil,
+			// 	Inline:         nil,
+			// },
+		}
+
+		// FIXME how to handle multiple SuggestedFixes and multiple TextEdits?
+
+		if len(diag.SuggestedFixes) > 0 {
+			// issue.LineRange = &result.Range{
+			// 	From: diag.Pkg.Fset.Position(diag.SuggestedFixes[0].TextEdits[0].Pos).Line,
+			// 	To:   diag.Pkg.Fset.Position(diag.SuggestedFixes[0].TextEdits[0].End).Line,
+			// }
+
+			length := diag.Pkg.Fset.Position(diag.SuggestedFixes[0].TextEdits[0].End).Column - diag.Pkg.Fset.Position(diag.SuggestedFixes[0].TextEdits[0].Pos).Column
+
+			if length <= 0 {
+				// FIXME it's a problem with the inline system, works with LineRange?
+			}
+
+			println("GGGGGGG", length)
+
+			issue.Replacement = &result.Replacement{
+				Inline: &result.InlineFix{
+					StartCol: diag.Pkg.Fset.Position(diag.SuggestedFixes[0].TextEdits[0].Pos).Column - 1,
+					Length:   length,
+					// NewString: "TEST",
+					// Length:    len(string(diag.SuggestedFixes[0].TextEdits[0].NewText)),
+					NewString: string(diag.SuggestedFixes[0].TextEdits[0].NewText),
+				},
+			}
+		}
+
+		issues = append(issues, issue)
+
+		/// ---
 
 		issues = append(issues, result.Issue{
 			FromLinter: linterName,
@@ -104,17 +152,16 @@ func buildIssues(diags []Diagnostic, linterNameBuilder func(diag *Diagnostic) st
 			Pkg:        diag.Pkg,
 		})
 
-		if len(diag.Related) > 0 {
-			for _, info := range diag.Related {
-				issues = append(issues, result.Issue{
-					FromLinter: linterName,
-					Text:       fmt.Sprintf("%s(related information): %s", diag.Analyzer.Name, info.Message),
-					Pos:        diag.Pkg.Fset.Position(info.Pos),
-					Pkg:        diag.Pkg,
-				})
-			}
+		for _, info := range diag.Related {
+			issues = append(issues, result.Issue{
+				FromLinter: linterName,
+				Text:       fmt.Sprintf("%s(related information): %s", diag.Analyzer.Name, info.Message),
+				Pos:        diag.Pkg.Fset.Position(info.Pos),
+				Pkg:        diag.Pkg,
+			})
 		}
 	}
+
 	return issues
 }
 
